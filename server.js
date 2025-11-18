@@ -1,4 +1,3 @@
-
 const express = require("express");
 const cors = require("cors");
 const { chromium } = require("playwright");
@@ -10,16 +9,24 @@ app.use(express.json());
 app.get("/track/:number", async (req, res) => {
     const number = req.params.number;
 
-    const browser = await chromium.launch({ headless: true });
+    // Uruchamiamy Chromium w trybie headless i bez GPU
+    const browser = await chromium.launch({
+        headless: true,
+        args: ["--disable-gpu", "--no-sandbox"]
+    });
+
     const page = await browser.newPage();
 
     try {
-        await page.goto("https://tracktrace.dpd.com.pl/", { waitUntil: "networkidle" });
+        // Większy timeout, żeby Railway nie zabił procesu
+        await page.goto("https://tracktrace.dpd.com.pl/", { waitUntil: "networkidle", timeout: 30000 });
 
+        // Wyszukaj input paczki
         await page.fill("input[name='q']", number);
         await page.click("button[type='submit']");
 
-        await page.waitForSelector("table", { timeout: 15000 });
+        // Czekaj na tabelę z historią paczki
+        await page.waitForSelector("table", { timeout: 30000 });
 
         const events = await page.$$eval("table tbody tr", rows =>
             rows.map(row => {
@@ -37,8 +44,11 @@ app.get("/track/:number", async (req, res) => {
 
     } catch (err) {
         await browser.close();
+        console.error("Błąd backendu:", err.message);
         res.status(500).json({ success: false, error: err.message });
     }
 });
 
-app.listen(3000, () => console.log("Backend działa na http://localhost:3000"));
+// Używaj portu z Railway, domyślnie 3000
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`Backend działa na http://localhost:${PORT}`));
